@@ -1,0 +1,4 @@
+storage:
+  path: /s3/storage
+  volumes: 1
+  max-volume-size: 10
