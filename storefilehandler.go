@@ -13,6 +13,13 @@ import (
 func ProcessStoreFile(application *Application, context *gin.Context) {
 
 	formFile, _ := context.FormFile("file_to_store")
+	if formFile == nil {
+		log.Println("Cannot store file, nothing is uploaded")
+		context.JSON(http.StatusBadRequest, gin.H{
+			"message": "Cannot store file, nothing is uploaded",
+		})
+		return
+	}
 
 	file, err := formFile.Open()
 	if err != nil {
@@ -20,6 +27,7 @@ func ProcessStoreFile(application *Application, context *gin.Context) {
 		context.JSON(http.StatusBadRequest, gin.H{
 			"message": "Cannot process uploaded file",
 		})
+		return
 	}
 	defer file.Close()
 
@@ -29,6 +37,7 @@ func ProcessStoreFile(application *Application, context *gin.Context) {
 		context.JSON(http.StatusBadRequest, gin.H{
 			"message": "Cannot read content of uploaded file",
 		})
+		return
 	}
 
 	volume := application.ChooseIdleVolume()
