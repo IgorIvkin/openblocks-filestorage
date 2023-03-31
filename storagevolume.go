@@ -42,14 +42,14 @@ func (volume *StorageVolume) StoreFile(content []byte) (string, error) {
 	defer volume.Unlock()
 
 	volume.Busy = true
-	if volume.Compacting {
-		log.Printf("Will not store the file, volume is compacting now")
-		return "", errors.New("cannot store file, volume is compacting")
+
+	lastInsertId, err := storeContentOfFile(volume.Database, content)
+	if err != nil {
+		volume.Busy = false
+		return "", err
 	}
-	lastInsertId, _ := storeContentOfFile(volume.Database, content)
 
 	volume.Busy = false
-
 	return fmt.Sprintf("%d-%d", volume.Index, lastInsertId), nil
 }
 
@@ -97,11 +97,16 @@ func storeContentOfFile(database *sql.DB, content []byte) (int64, error) {
 	transaction, _ := database.Begin()
 
 	// Вставляем файл в хранилище
-	query := `INSERT INTO files(mime_type, content, file_size, status) VALUES ($1, $2, $3, $4)`
-	result, err := transaction.Exec(query, "", content, len(content), 1)
+	statement, err := transaction.Prepare(`INSERT INTO files(mime_type, content, file_size, status) VALUES (?, ?, ?, ?)`)
 	if err != nil {
 		transaction.Rollback()
-		log.Printf("Cannot update meta-info, reason: %v", err)
+		log.Printf("Cannot prepare query to insert file, reason: %v", err)
+		return 0, errors.New("cannot insert file")
+	}
+	result, err := statement.Exec("", content, len(content), 1)
+	if err != nil {
+		transaction.Rollback()
+		log.Printf("Cannot insert file, reason: %v", err)
 		return 0, errors.New("cannot insert file")
 	}
 
@@ -120,11 +125,15 @@ func storeContentOfFile(database *sql.DB, content []byte) (int64, error) {
 }
 
 func updateMetaInfo(transaction *sql.Tx, contentSize int) {
-	query := `UPDATE meta_info SET total_size = total_size + $1`
-	_, err := transaction.Exec(query, contentSize)
+	statement, err := transaction.Prepare(`UPDATE meta_info SET total_size = total_size + ?`)
 	if err != nil {
 		transaction.Rollback()
+		log.Printf("Cannot prepare query to update meta-info, reason: %v", err)
 		return
+	}
+	_, err2 := statement.Exec(contentSize)
+	if err2 != nil {
+		transaction.Rollback()
 	}
 }
 

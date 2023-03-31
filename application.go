@@ -53,12 +53,16 @@ func (app *Application) ChooseIdleVolume() *StorageVolume {
 
 	// Выбираем один случайный том, если он оказался занят работой,
 	// прокручиваем все тома, пока не найдем свободный
-	selectedVolume = app.Volumes[rand.Intn(len(app.Volumes))]
-	if selectedVolume.Busy {
+	volumesCount := len(app.Volumes)
+	if volumesCount == 0 {
+		log.Fatal("Cannot choose idle volume, no volumes presented, check that you specified correct \"storage.path\" parameter")
+	}
+	selectedVolume = app.Volumes[rand.Intn(volumesCount)]
+	if selectedVolume.Busy || selectedVolume.Compacting {
 		for {
 			var found bool
 			for _, volume := range app.Volumes {
-				if !volume.Busy {
+				if !volume.Busy && !volume.Compacting {
 					found = true
 					selectedVolume = volume
 					break
