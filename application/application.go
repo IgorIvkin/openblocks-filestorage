@@ -1,10 +1,13 @@
-package main
+package application
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"math/rand"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -78,6 +81,34 @@ func (app *Application) ChooseIdleVolume() *StorageVolume {
 	return selectedVolume
 }
 
+// Получает файл из тома, если такой файл не найден, возвращается ошибка.
+// Если файл найден, функция возвращает его содержимое в виде массива байтов,
+// а также MIME-тип хранимых данных, что позволяет сформировать корректный ответ
+func (app *Application) GetFile(fileId string) ([]byte, string, error) {
+	parts := strings.Split(fileId, "-")
+	if len(parts) != 2 {
+		return nil, "", fmt.Errorf("incorrect file ID %s", fileId)
+	}
+
+	volumeId, err := strToInt32(parts[0])
+	if err != nil {
+		return nil, "", err
+	}
+
+	entityId, err := strToInt64(parts[1])
+	if err != nil {
+		return nil, "", err
+	}
+
+	for index, volume := range app.Volumes {
+		if index == volumeId {
+			return volume.GetFile(entityId)
+		}
+	}
+
+	return nil, "", fmt.Errorf("file not found by ID %s", fileId)
+}
+
 // Возвращает конфигурацию, заданную в yml-файле приложения,
 // в ней можно задать множественные рейт-лимитеры.
 func getConfig() *ApplicationConfig {
@@ -95,4 +126,20 @@ func getConfig() *ApplicationConfig {
 	}
 
 	return &config
+}
+
+func strToInt32(value string) (int, error) {
+	number, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("string value is incorrect integer: %s", value)
+	}
+	return number, nil
+}
+
+func strToInt64(value string) (int64, error) {
+	number, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("string value is incorrect int64: %s", value)
+	}
+	return number, nil
 }

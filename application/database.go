@@ -1,8 +1,9 @@
-package main
+package application
 
 import (
 	"database/sql"
 	"fmt"
+	"log"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -28,6 +29,8 @@ func NewDatabases(config *ApplicationConfig) []*sql.DB {
 			databases = append(databases, db)
 			i += 1
 		}
+	} else {
+		log.Fatalf("Storage directory does not exist, check setting `storage-path`: %v", genericPath)
 	}
 
 	return databases
@@ -40,7 +43,7 @@ func initializeDb(database *sql.DB) {
 
 func initializeFilesTable(database *sql.DB) {
 	query := `CREATE TABLE IF NOT EXISTS files (
-		id INTEGER PRIMARY KEY AUTOINCREMENT, 
+		id int64 PRIMARY KEY AUTOINCREMENT, 
 		mime_type text NOT NULL, 
 		content blob, 
 		file_size int64 NOT NULL,

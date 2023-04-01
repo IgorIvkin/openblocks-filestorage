@@ -1,4 +1,4 @@
-package main
+package application
 
 import (
 	"database/sql"
@@ -19,6 +19,14 @@ type StorageVolume struct {
 	sync.Mutex
 }
 
+type FileEntity struct {
+	Id       int64
+	Content  []byte
+	MimeType string
+	FileSize int64
+	Status   int
+}
+
 type MetaInfo struct {
 	TotalSize  int64
 	Compacting int32
@@ -37,13 +45,13 @@ func NewStorageVolumes(databases []*sql.DB) []*StorageVolume {
 }
 
 // Сохраняет файл в выбранном томе
-func (volume *StorageVolume) StoreFile(content []byte) (string, error) {
+func (volume *StorageVolume) StoreFile(content []byte, fileType string) (string, error) {
 	volume.Lock()
 	defer volume.Unlock()
 
 	volume.Busy = true
 
-	lastInsertId, err := storeContentOfFile(volume.Database, content)
+	lastInsertId, err := storeContentOfFile(volume.Database, content, fileType)
 	if err != nil {
 		volume.Busy = false
 		return "", err
@@ -51,6 +59,13 @@ func (volume *StorageVolume) StoreFile(content []byte) (string, error) {
 
 	volume.Busy = false
 	return fmt.Sprintf("%d-%d", volume.Index, lastInsertId), nil
+}
+
+// Получает файл из тома, если такой файл не найден, возвращается ошибка.
+// Если файл найден, функция возвращает его содержимое в виде массива байтов,
+// а также MIME-тип хранимых данных, что позволяет сформировать корректный ответ
+func (volume *StorageVolume) GetFile(fileId int64) ([]byte, string, error) {
+	return getFileContent(volume.Database, fileId)
 }
 
 func initializeStorageVolume(database *sql.DB, index int) *StorageVolume {
@@ -61,9 +76,8 @@ func initializeStorageVolume(database *sql.DB, index int) *StorageVolume {
 	defer rows.Close()
 
 	var found bool = false
-	var metaInfo MetaInfo
+	var metaInfo MetaInfo = MetaInfo{}
 	for rows.Next() {
-		metaInfo = MetaInfo{}
 		err := rows.Scan(&metaInfo.TotalSize, &metaInfo.Compacting)
 		if err != nil {
 			panic(err)
@@ -93,7 +107,40 @@ func initializeStorageVolume(database *sql.DB, index int) *StorageVolume {
 	return &storageVolume
 }
 
-func storeContentOfFile(database *sql.DB, content []byte) (int64, error) {
+func getFileContent(database *sql.DB, fileId int64) ([]byte, string, error) {
+	statement, err := database.Prepare(`SELECT id, mime_type, content, file_size, status FROM files WHERE id = ?`)
+	if err != nil {
+		return nil, "", err
+	}
+
+	rows, err := statement.Query(fileId)
+	if err != nil {
+		return nil, "", err
+	}
+	var found bool = false
+	var fileEntity FileEntity = FileEntity{}
+	for rows.Next() {
+		err := rows.Scan(
+			&fileEntity.Id,
+			&fileEntity.MimeType,
+			&fileEntity.Content,
+			&fileEntity.FileSize,
+			&fileEntity.Status,
+		)
+		if err != nil {
+			return nil, "", err
+		}
+		found = true
+	}
+
+	if found {
+		return fileEntity.Content, fileEntity.MimeType, nil
+	} else {
+		return nil, "", fmt.Errorf("file not found by ID %d", fileId)
+	}
+}
+
+func storeContentOfFile(database *sql.DB, content []byte, fileType string) (int64, error) {
 	transaction, _ := database.Begin()
 
 	// Вставляем файл в хранилище
@@ -103,7 +150,7 @@ func storeContentOfFile(database *sql.DB, content []byte) (int64, error) {
 		log.Printf("Cannot prepare query to insert file, reason: %v", err)
 		return 0, errors.New("cannot insert file")
 	}
-	result, err := statement.Exec("", content, len(content), 1)
+	result, err := statement.Exec(fileType, content, len(content), 1)
 	if err != nil {
 		transaction.Rollback()
 		log.Printf("Cannot insert file, reason: %v", err)

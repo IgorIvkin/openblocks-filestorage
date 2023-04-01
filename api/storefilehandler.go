@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"fmt"
@@ -6,11 +6,22 @@ import (
 	"log"
 	"net/http"
 
+	app "openblocks/filestorage/application"
+
 	"github.com/gin-gonic/gin"
 )
 
 // Обрабатывает запрос на сохранение нового файла
-func ProcessStoreFile(application *Application, context *gin.Context) {
+func ProcessStoreFile(application *app.Application, context *gin.Context) {
+
+	fileType := context.Request.FormValue("file_type")
+	if fileType == "" {
+		log.Println("Cannot store file, file type is missing")
+		context.JSON(http.StatusBadRequest, gin.H{
+			"message": "Cannot store file, file type is missing",
+		})
+		return
+	}
 
 	formFile, _ := context.FormFile("file_to_store")
 	if formFile == nil {
@@ -41,7 +52,7 @@ func ProcessStoreFile(application *Application, context *gin.Context) {
 	}
 
 	volume := application.ChooseIdleVolume()
-	fileId, err := volume.StoreFile(content)
+	fileId, err := volume.StoreFile(content, fileType)
 	if err != nil {
 		message := fmt.Sprintf("Cannot store file %s, reason: %v", formFile.Filename, err)
 		log.Println(message)
