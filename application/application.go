@@ -20,13 +20,20 @@ type Application struct {
 }
 
 type ApplicationConfig struct {
-	Storage ApplicationConfigStorage `yaml:"storage"`
+	Storage ApplicationConfigStorage   `yaml:"storage"`
+	General ApplicationGeneralSettings `yaml:"general"`
 }
 
 type ApplicationConfigStorage struct {
 	Path          string `yaml:"path"`
 	Volumes       int32  `yaml:"volumes"`
 	MaxVolumeSize int32  `yaml:"max-volume-size"`
+}
+
+type ApplicationGeneralSettings struct {
+	UseJwtAuth bool     `yaml:"use-jwt-auth"`
+	JwksUrl    string   `yaml:"jwks-url"`
+	ExceptUrls []string `yaml:"except-urls"`
 }
 
 // Возвращает экземпляр приложения, в нём представлены конфигурация, список баз данных

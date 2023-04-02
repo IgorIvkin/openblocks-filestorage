@@ -2,3 +2,9 @@ storage:
   path: /s3/storage
   volumes: 1
   max-volume-size: 10
+
+general:
+  use-jwt-auth: true
+  jwks-url: "http://localhost:8534/realms/infra/protocol/openid-connect/certs"
+  except-urls:
+    - /api/v1/file/
